@@ -4,12 +4,14 @@ import {LLMSetup} from "./LLMSetup.tsx"
 import {LLMTools} from "./LLMTools.tsx"
 import {LLMChatArea} from "./LLMChatArea.tsx"
 import {Column, Grid} from "@carbon/react"
-import {LlmConfig, loadConfig} from "./config.ts"
+import {LlmConfig, loadConfig, toolsForNamespace} from "./config.ts"
+import {Namespace} from "../../models";
 
 
 export const LLMChatPage: React.FC = () => {
   
   const [config, setConfig] = useState<LlmConfig>(loadConfig())
+  const [selectedNamespace, setSelectedNamespace] = useState<Namespace>()
   
   return (
     <div>
@@ -18,8 +20,10 @@ export const LLMChatPage: React.FC = () => {
         <Column lg={4}>
           <LLMSetup config={config} onChange={setConfig} />
           <LLMTools
-            selectedTools={config.tools}
-            onSelectionChange={(tools) => {
+            selectedNamespace={selectedNamespace}
+            selectedTools={toolsForNamespace(config, selectedNamespace)}
+            onNamespaceChange={namespace => setSelectedNamespace(namespace)}
+            onSelectionChange={tools => {
               setConfig({ ...config, tools })
             }}
           />

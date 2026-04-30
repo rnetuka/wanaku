@@ -1,4 +1,4 @@
-import {ToolReference} from "../../models"
+import {Namespace, ToolReference} from "../../models"
 
 
 export interface LlmConfig {
@@ -6,6 +6,7 @@ export interface LlmConfig {
   llmModel?: string
   apiKey?: string
   extraLlmParams?: string
+  namespace?: string
   tools: ToolReference[]
 }
 
@@ -38,4 +39,11 @@ export function loadConfig(): LlmConfig {
     }
   }
   return defaultLlmConfig()
+}
+
+export function toolsForNamespace(config: LlmConfig, namespace?: Namespace): ToolReference[] {
+  if (namespace) {
+    return config.tools.filter(tool => tool.namespace === namespace.id)
+  }
+  return config.tools
 }

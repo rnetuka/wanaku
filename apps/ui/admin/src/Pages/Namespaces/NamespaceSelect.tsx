@@ -10,10 +10,11 @@ interface NamespaceSelectProps {
   labelText?: string
   helperText?: string
   value?: string
+  onInit?: (namespace: Namespace) => void
   onChange: (namespace: Namespace) => void
 }
 
-export const NamespaceSelect : React.FC<NamespaceSelectProps> = ({ id, labelText, helperText, value, onChange }) => {
+export const NamespaceSelect : React.FC<NamespaceSelectProps> = ({ id, labelText, helperText, value, onInit, onChange }) => {
   
   const [namespaces, setNamespaces] = useState<Namespace[]>([])
   const [selectedNamespace, setSelectedNamespace] = useState<Namespace>()
@@ -30,6 +31,9 @@ export const NamespaceSelect : React.FC<NamespaceSelectProps> = ({ id, labelText
         }
         setNamespaces(namespaces)
         setSelectedNamespace(selected)
+        if (onInit) {
+          onInit(selected!)
+        }
       }
     })()
   }, [listNamespaces])
