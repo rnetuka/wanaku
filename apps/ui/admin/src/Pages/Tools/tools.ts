@@ -1,4 +1,4 @@
-import {ToolReference} from "../../models"
+import {InputSchema, ToolReference} from "../../models"
 
 
 export class ToolParserError extends Error {
@@ -60,6 +60,11 @@ export class Tools {
       }
       return "Invalid input schema"
     }
+  }
+  
+  static parseInputSchema(string: string): InputSchema {
+    const json: unknown = JSON.parse(string)
+    return json as InputSchema
   }
   
 }

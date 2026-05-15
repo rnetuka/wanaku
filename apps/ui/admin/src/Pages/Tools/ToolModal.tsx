@@ -8,13 +8,12 @@ import {
   TextInput
 } from "@carbon/react";
 import React, {useEffect, useState} from "react";
-import {Namespace, ToolReference} from "../../models";
+import {InputSchema, Namespace, ToolReference} from "../../models";
 import {TargetTypeSelect} from "../Targets/TargetTypeSelect";
 import {useCapabilities} from "../../hooks/api/use-capabilities";
-import {formatInputSchema, parseInputSchema} from "./tools-utils.ts";
 import {NamespaceSelect} from "../Namespaces/NamespaceSelect.tsx";
 import {useNamespaces} from "../../hooks/api/use-namespaces"
-import {Tools} from "./tools"
+import {InputSchemaPage} from "./InputSchemaPage.tsx";
 
 
 interface ToolModalProps {
@@ -37,9 +36,8 @@ export const ToolModal: React.FC<ToolModalProps> = ({
   const [description, setDescription] = useState(tool?.description || "")
   const [uri, setUri] = useState(tool?.uri || "")
   const [toolType, setToolType] = useState(tool?.type || "http")
-  const [inputSchema, setInputSchema] = useState(formatInputSchema(tool?.inputSchema))
+  const [inputSchema, setInputSchema] = useState(tool?.inputSchema)
   const [inputSchemaInvalid, setInputSchemaInvalid] = useState(false)
-  const [inputSchemaInvalidText, setInputSchemaInvalidText] = useState("")
   const [selectedNamespace, setSelectedNamespace] = useState(tool?.namespace)
   const [configurationURI, setConfigurationURI] = useState(tool?.configurationURI || "")
   const [secretsURI, setSecretsURI] = useState(tool?.secretsURI || "")
@@ -57,14 +55,13 @@ export const ToolModal: React.FC<ToolModalProps> = ({
 
   const handleSubmit = () => {
     try {
-      const schema = parseInputSchema(inputSchema)
       onSubmit({
         id: tool?.id,
         name: toolName,
         description,
         uri,
         type: toolType,
-        inputSchema: schema,
+        inputSchema,
         namespace: selectedNamespace,
         configurationURI,
         secretsURI
@@ -103,11 +100,6 @@ export const ToolModal: React.FC<ToolModalProps> = ({
     setToolNameInvalid(toolNameAlreadyExists(toolName, namespaceId))
     setToolNameInvalidText(`This tool name already exists in namespace: ${findNamespace(namespaceId)!.path}`)
   }
-  
-  function validateInputSchema(schema: string) {
-    setInputSchemaInvalid(Tools.isInputSchemaInvalid(schema))
-    setInputSchemaInvalidText(Tools.validateInputSchema(schema))
-  }
 ``
   return (
     <Modal
@@ -122,83 +114,80 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       <Tabs>
         <TabList>
           <Tab>Overview</Tab>
+          <Tab>Input Schema</Tab>
           <Tab>External</Tab>
         </TabList>
-        <TabPanels>
-          <TabPanel>
-            <TextInput
-              id="tool-name"
-              labelText="Tool Name"
-              placeholder="e.g. meow-facts"
-              value={toolName}
-              invalid={toolNameInvalid}
-              invalidText={toolNameInvalidText}
-              onChange={(event) => {
-                const name = event.target.value
-                setToolName(name)
-                validateToolName(name, selectedNamespace)
-              }}
-            />
-            <TextInput
-              id="tool-description"
-              labelText="Description"
-              placeholder="e.g. Retrieve random facts about cats"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-            <TextInput
-              id="tool-uri"
-              labelText="URI"
-              placeholder="e.g. https://meowfacts.herokuapp.com?count={count}"
-              value={uri}
-              onChange={(event) => setUri(event.target.value)}
-            />
-            <TargetTypeSelect
-              value={toolType}
-              onChange={setToolType}
-              apiCall={listManagementTools}
-            />
-            <TextInput
-              id="input-schema"
-              labelText="Input Schema"
-              placeholder='e.g. {"type": "object", "properties": {"count": {"type": "int", "description": "The count of facts to retrieve"}}, "required": ["count"]}'
-              value={inputSchema}
-              invalid={inputSchemaInvalid}
-              invalidText={inputSchemaInvalidText}
-              onChange={(event) => {
-                const schema = event.target.value
-                setInputSchema(schema)
-                validateInputSchema(schema)
-              }}
-            />
-            <NamespaceSelect
-              id="namespace"
-              labelText="Select a Namespace"
-              helperText="Choose a Namespace from the list"
-              value={selectedNamespace}
-              onChange={namespace => {
-                setSelectedNamespace(namespace.id)
-                validateToolName(toolName, namespace.id)
-              }}
-            />
-          </TabPanel>
-          <TabPanel>
-            <TextInput
-              id="configuration-uri"
-              labelText="Configuration URI"
-              placeholder="e.g., file:///config/tool-config.json"
-              value={configurationURI}
-              onChange={(event) => setConfigurationURI(event.target.value)}
-            />
-            <TextInput
-              id="secrets-uri"
-              labelText="Secrets URI"
-              placeholder="e.g., vault://secrets/api-keys/tool-name"
-              value={secretsURI}
-              onChange={(event) => setSecretsURI(event.target.value)}
-            />
-          </TabPanel>
-        </TabPanels>
+        <div style={{ height: '400px', overflowY: 'auto' }}>
+          <TabPanels>
+            <TabPanel>
+              <TextInput
+                id="tool-name"
+                labelText="Tool Name"
+                placeholder="e.g. meow-facts"
+                value={toolName}
+                invalid={toolNameInvalid}
+                invalidText={toolNameInvalidText}
+                onChange={(event) => {
+                  const name = event.target.value
+                  setToolName(name)
+                  validateToolName(name, selectedNamespace)
+                }}
+              />
+              <TextInput
+                id="tool-description"
+                labelText="Description"
+                placeholder="e.g. Retrieve random facts about cats"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+              <TextInput
+                id="tool-uri"
+                labelText="URI"
+                placeholder="e.g. https://meowfacts.herokuapp.com?count={count}"
+                value={uri}
+                onChange={(event) => setUri(event.target.value)}
+              />
+              <TargetTypeSelect
+                value={toolType}
+                onChange={setToolType}
+                apiCall={listManagementTools}
+              />
+              <NamespaceSelect
+                id="namespace"
+                labelText="Select a Namespace"
+                helperText="Choose a Namespace from the list"
+                value={selectedNamespace}
+                onChange={namespace => {
+                  setSelectedNamespace(namespace.id)
+                  validateToolName(toolName, namespace.id)
+                }}
+              />
+            </TabPanel>
+            <TabPanel>
+              <InputSchemaPage
+                tool={tool}
+                onChange={(inputSchema: InputSchema) => {setInputSchema(inputSchema)}}
+                onValidate={(invalid: boolean) => setInputSchemaInvalid(invalid)}
+              />
+            </TabPanel>
+            <TabPanel>
+              <TextInput
+                id="configuration-uri"
+                labelText="Configuration URI"
+                placeholder="e.g., file:///config/tool-config.json"
+                value={configurationURI}
+                onChange={(event) => setConfigurationURI(event.target.value)}
+              />
+              <TextInput
+                id="secrets-uri"
+                labelText="Secrets URI"
+                placeholder="e.g., vault://secrets/api-keys/tool-name"
+                value={secretsURI}
+                onChange={(event) => setSecretsURI(event.target.value)}
+              />
+            </TabPanel>
+          </TabPanels>
+        </div>
       </Tabs>
     </Modal>
   )
