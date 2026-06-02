@@ -1,90 +1,131 @@
 package ai.wanaku.backend.api.v1.chat;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 
-import java.io.IOException;
 import java.io.StringReader;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpRequest.BodyPublishers;
-import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
+import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequestParameters;
+import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.UserMessage;
 
 import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
+import static jakarta.ws.rs.core.MediaType.TEXT_PLAIN;
 import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static jakarta.ws.rs.core.Response.Status.OK;
-import static jakarta.ws.rs.core.Response.Status.TOO_MANY_REQUESTS;
+import static jakarta.ws.rs.core.Response.Status.NOT_FOUND;
 
 @ApplicationScoped
 @Path("/api/v1/chat")
 public class LlmChatResource {
+
     private static final Logger LOG = Logger.getLogger(LlmChatResource.class);
+
+    @ConfigProperty(name = "wanaku.chat.mcp-url", defaultValue = "http://localhost:8080/public/mcp")
+    String mcpServerUrl;
 
     @ConfigProperty(name = "wanaku.chat.allowlist")
     List<String> allowlist;
 
+    @Inject
+    LlmSupport llmSupport;
+
     @GET
-    @Path("/allowlist")
+    @Path("/llms")
     @Produces(APPLICATION_JSON)
-    public List<String> getBaseUrls() {
-        return allowlist;
+    public List<String> getAllowedLlms() {
+        return llmSupport.getSupportedLlms().stream()
+                .filter(llm -> allowlist.contains(llm))
+                .toList();
+    }
+
+    @GET
+    @Path("/{llm}/models")
+    @Produces(APPLICATION_JSON)
+    public List<String> getModelSuggestions(@PathParam("llm") String llm) {
+        String llmCapitalized = llm.substring(0, 1).toUpperCase() + llm.substring(1);
+        if (!llmSupport.getSupportedLlms().contains(llmCapitalized)) {
+            throw new WebApplicationException("%s is not supported".formatted(llm), NOT_FOUND);
+        }
+        if (!allowlist.contains(llmCapitalized)) {
+            throw new WebApplicationException("%s is not allowed".formatted(llm), NOT_FOUND);
+        }
+        return llmSupport.getModelSuggestions(llmCapitalized);
     }
 
     @POST
     @Path("/completions")
     @Consumes(APPLICATION_JSON)
-    @Produces(APPLICATION_JSON)
+    @Produces(TEXT_PLAIN)
     public String codeCompletions(String data) {
         JsonObject json = Json.createReader(new StringReader(data)).readObject();
-        String baseUrl = json.getString("baseUrl");
-        String apiKey = json.getString("apiKey", null);
-        JsonObject llmParams = json.getJsonObject("chatParams");
+        LlmChatParameters parameters = LlmChatParameters.fromJson(json);
 
-        if (!allowlist.contains(baseUrl)) {
-            throw new WebApplicationException("Base URL: %s is not allowed".formatted(baseUrl), BAD_REQUEST);
+        if (!allowlist.contains(parameters.llm())) {
+            throw new WebApplicationException("%s is not allowed".formatted(parameters.llm()), BAD_REQUEST);
         }
-        try (var client = HttpClient.newHttpClient()) {
-            String url = baseUrl + "/v1/chat/completions";
-            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                    .uri(new URI(url))
-                    .POST(BodyPublishers.ofString(llmParams.toString()))
-                    .header("Content-Type", APPLICATION_JSON);
 
-            if (apiKey != null && !apiKey.isEmpty()) {
-                requestBuilder.header("Authorization", "Bearer " + apiKey);
+        McpTransport transport = StreamableHttpMcpTransport.builder()
+                .url(mcpServerUrl)
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+
+        try (McpClient mcpClient =
+                DefaultMcpClient.builder().transport(transport).build()) {
+
+            McpToolProvider toolProvider = McpToolProvider.builder()
+                    .mcpClients(mcpClient)
+                    .filterToolNames(parameters.selectedTools())
+                    .build();
+
+            ChatModel model = llmSupport.createChatModel(parameters.llm(), parameters.modelName(), parameters.apiKey());
+            ChatMemory chatMemory = MessageWindowChatMemory.withMaxMessages(10);
+            chatMemory.set(parameters.chatHistory());
+
+            AiServices<ChatBot> aiServices = AiServices.builder(ChatBot.class)
+                    .chatModel(model)
+                    .chatMemory(chatMemory)
+                    .toolProvider(toolProvider);
+
+            if (parameters.systemPrompt() != null) {
+                aiServices = aiServices.systemMessage(parameters.systemPrompt());
             }
-            HttpRequest request = requestBuilder.build();
-            HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
 
-            if (response.statusCode() != OK.getStatusCode()) {
-                LOG.errorf("HTTP Response Error: %s", response.body());
+            ChatBot bot = aiServices.build();
 
-                if (response.statusCode() == TOO_MANY_REQUESTS.getStatusCode()) {
-                    throw new WebApplicationException(TOO_MANY_REQUESTS);
-                }
-
-                throw new WebApplicationException(INTERNAL_SERVER_ERROR);
-            }
-
-            return response.body();
-        } catch (URISyntaxException ex) {
-            throw new WebApplicationException("Malformed base URL", ex, BAD_REQUEST);
-        } catch (IOException | InterruptedException ex) {
-            throw new WebApplicationException(INTERNAL_SERVER_ERROR);
+            return parameters.extraLlmParameters() == null
+                    ? bot.chat(parameters.userPrompt())
+                    : bot.chat(parameters.userPrompt(), parameters.extraLlmParameters());
+        } catch (Exception ex) {
+            LOG.errorf("Error in LLM chat: %s", ex);
+            throw new WebApplicationException(ex, INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private interface ChatBot {
+
+        String chat(@UserMessage String userMessage);
+
+        String chat(@UserMessage String userMessage, ChatRequestParameters params);
     }
 }

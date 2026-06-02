@@ -11,7 +11,7 @@ import {
   LlmConfig,
   STORE_IN_LOCAL_STORAGE
 } from "./config.ts"
-import {BaseUrlSelect} from "./BaseUrlSelect"
+import {LLMSelect} from "./LLMSelect"
 import {LLMModelComboBox} from "./LLMModelComboBox"
 
 
@@ -50,17 +50,18 @@ export const LLMSetup: React.FC<LLMSetupProps> = ({ config, onChange }) => {
           }}
           id="enabledLocalStorage"
         />
-        <BaseUrlSelect
+        <LLMSelect
           id="base-url"
-          labelText="LLM API Base URL"
-          value={config.baseUrl || ""}
-          onChange={(baseUrl: string) => {
-            applyConfigChange({ ...config, baseUrl })
+          labelText="LLM API"
+          value={config.llm || ""}
+          onChange={(llm: string) => {
+            applyConfigChange({ ...config, llm })
           }}
         />
         <LLMModelComboBox
           labelText="LLM Model"
-          config={config}
+          llm={config.llm || ""}
+          value={config.llmModel}
           onChange={(llmModel) => {
             applyConfigChange({ ...config, llmModel })
           }}
