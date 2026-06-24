@@ -61,9 +61,10 @@ export const LLMChatPage: React.FC = () => {
             }}
           />
           <LLMTools
+            selectedNamespace={config.selectedNamespace}
             selectedTools={config.selectedTools}
-            onSelectionChange={(selectedTools) => {
-              applyConfigChange({ ...config, selectedTools })
+            onSelectionChange={(selectedNamespace, selectedTools) => {
+              applyConfigChange({ ...config, selectedNamespace, selectedTools })
             }}
           />
         </Column>

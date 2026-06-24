@@ -6,15 +6,17 @@ import {
 } from "@carbon/react"
 import React, {useEffect, useState} from "react"
 import {useTools} from "../../hooks/api/use-tools"
-import {ToolReference} from "../../models"
+import {Namespace, ToolReference} from "../../models"
+import {NamespaceSelect} from "../Namespaces/NamespaceSelect.tsx";
 
 
 interface LLMToolsProps {
+  selectedNamespace: Namespace
   selectedTools: ToolReference[]
-  onSelectionChange: (tools: ToolReference[]) => void
+  onSelectionChange: (namespace: Namespace, tools: ToolReference[]) => void
 }
 
-export const LLMTools: React.FC<LLMToolsProps> = ({ selectedTools, onSelectionChange }) => {
+export const LLMTools: React.FC<LLMToolsProps> = ({ selectedNamespace, selectedTools, onSelectionChange }) => {
   
   const [tools, setTools] = useState<ToolReference[]>([])
   const [isLoading, setLoading] = useState(true)
@@ -42,24 +44,42 @@ export const LLMTools: React.FC<LLMToolsProps> = ({ selectedTools, onSelectionCh
     return response.data.data
   }
   
+  function filteredTools(): ToolReference[] {
+    if (!selectedNamespace) {
+      return tools
+    }
+    if (selectedNamespace.path === "default") {
+      return tools.filter(tool => !tool.namespace || tool.namespace === selectedNamespace.id)
+    }
+    return tools.filter(tool => tool.namespace === selectedNamespace.id)
+  }
+  
   function isAllSelected() {
     const selectedToolNames = selectedTools.map(tool => tool.name)
-    return tools.length > 0 && tools.every((tool) => selectedToolNames.includes(tool.name))
+    return selectedTools.length > 0 && filteredTools().every((tool) => selectedToolNames.includes(tool.name))
   }
   
   function isSomeSelected() {
-    return selectedTools.length > 0 && selectedTools.length < tools.length
+    return selectedTools.length > 0 && selectedTools.length < filteredTools().length
   }
   
   return (
-    <Stack gap={7}>
+    <Stack gap={5}>
+      <NamespaceSelect
+        id="namespace"
+        labelText="Namespace"
+        value={selectedNamespace.id}
+        onChange={(namespace: Namespace) => {
+          onSelectionChange(namespace, [])
+        }}
+      />
       {isLoading &&
         <InlineLoading description="Loading tools..." />
       }
-      {!isLoading && tools.length == 0 &&
+      {!isLoading && filteredTools().length == 0 &&
         <div>No tools available</div>
       }
-      {!isLoading && tools.length > 0 && (
+      {!isLoading && filteredTools().length > 0 && (
         <CheckboxGroup legendText="Select tools">
           <Checkbox
             id="select-all"
@@ -68,10 +88,10 @@ export const LLMTools: React.FC<LLMToolsProps> = ({ selectedTools, onSelectionCh
             indeterminate={isSomeSelected()}
             onChange={(_, { checked }) => {
               const selection = checked ? [...tools] : []
-              onSelectionChange(selection)
+              onSelectionChange(selectedNamespace, selection)
             }}
           />
-          {tools.map((tool) => (
+          {filteredTools().map((tool) => (
             <Checkbox
               id={tool.name!}
               key={tool.name}
@@ -82,7 +102,7 @@ export const LLMTools: React.FC<LLMToolsProps> = ({ selectedTools, onSelectionCh
                 const selection = checked
                   ? [...selectedTools, tool]
                   : selectedTools.filter(item => item.name != tool.name)
-                onSelectionChange(selection)
+                onSelectionChange(selectedNamespace, selection)
               }}
             />
           ))}
