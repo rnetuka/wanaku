@@ -59,6 +59,7 @@ export const LLMChatArea: React.FC<LLMChatAreaProps> = ({ config, onSystemPrompt
       async function send(): Promise<Response> {
         const extraLlmParams = config.extraLlmParams ? JSON.parse(config.extraLlmParams) : {}
         return await fetch(getInferenceUrl("/v1/chat/completions"), {
+          signal,
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -113,9 +114,12 @@ export const LLMChatArea: React.FC<LLMChatAreaProps> = ({ config, onSystemPrompt
                 const toolArgs = JSON.parse(toolCall.function.arguments || "{}")
                 
                 const toolResult = await mcpClient!.callTool({
-                  name: toolName,
-                  arguments: toolArgs
-                })
+                    name: toolName,
+                    arguments: toolArgs
+                  },
+                  undefined,
+                  { signal }
+                )
                 const toolResultText = (toolResult.content as Array<{ text: string }>)[0].text
                 chatHistory.current.push({
                   role: "tool",
