@@ -32,7 +32,7 @@ use self::handlers::{
     handle_tool_delete, handle_tool_get, handle_tool_list, handle_tool_update,
 };
 use crate::http_response::{json_err, json_ok};
-use self::response::{raw_json_response, read_body};
+use self::response::{cors_preflight_response, raw_json_response, read_body};
 #[cfg(feature = "ui")]
 use self::response::redirect_response;
 use self::routes::{
@@ -114,6 +114,10 @@ pub(crate) async fn dispatch(
     registry: &InMemoryRegistry,
     features: &[Box<dyn Feature>],
 ) -> Response<Vec<u8>> {
+    if ctx.method == "OPTIONS" {
+        return cors_preflight_response();
+    }
+
     if ctx.path == "/healthz" || ctx.path == "/health" {
         return json_ok(&serde_json::json!({"status": "ok"}));
     }
@@ -291,5 +295,20 @@ mod dispatch_tests {
         let resp = dispatch(&ctx, &registry, features).await;
 
         assert_eq!(resp.status(), 400);
+    }
+
+    #[tokio::test]
+    async fn dispatch_options_returns_cors_preflight() {
+        let registry = InMemoryRegistry::new();
+        let headers = http::HeaderMap::new();
+        let features: &[Box<dyn Feature>] = &[];
+        let ctx = HttpContext::new("OPTIONS", "/default/mcp", None, None, &headers);
+
+        let resp = dispatch(&ctx, &registry, features).await;
+
+        assert_eq!(resp.status(), 204);
+        assert!(resp.headers().contains_key("Access-Control-Allow-Origin"));
+        assert!(resp.headers().contains_key("Access-Control-Allow-Methods"));
+        assert!(resp.headers().contains_key("Access-Control-Allow-Headers"));
     }
 }

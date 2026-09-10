@@ -4,6 +4,18 @@ use tracing::warn;
 
 use crate::http_response::json_err;
 
+#[expect(clippy::expect_used, reason = "valid static response")]
+pub(super) fn cors_preflight_response() -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::NO_CONTENT)
+        .header("Access-Control-Allow-Origin", wanaku_types::config::ENV.cors_origin.as_str())
+        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version")
+        .header("Access-Control-Max-Age", "86400")
+        .body(Vec::new())
+        .expect("valid preflight response")
+}
+
 pub(super) const MAX_BODY_BYTES: usize = 1_048_576;
 
 #[cfg(feature = "ui")]
